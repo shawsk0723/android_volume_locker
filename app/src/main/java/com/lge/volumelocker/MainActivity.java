@@ -35,23 +35,17 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-
-
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-
-        //startAndCheck(null);
         LOG.d(TAG, "onStart()");
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-
-        //stopService(intent());
         LOG.d(TAG, "onStop()");
     }
 
@@ -124,6 +118,5 @@ public class MainActivity extends AppCompatActivity {
     private Intent intent() {
         return new Intent(this, VolumeLockService.class);
     }
-
 
 }

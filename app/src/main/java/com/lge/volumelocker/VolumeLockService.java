@@ -3,7 +3,6 @@ package com.lge.volumelocker;
 import android.app.Service;
 import android.content.Intent;
 import android.hardware.SensorManager;
-import android.os.Handler;
 import android.os.IBinder;
 import android.widget.Toast;
 
@@ -12,12 +11,12 @@ import com.squareup.seismic.ShakeDetector;
 public class VolumeLockService extends Service implements ShakeDetector.Listener {
     private static final String TAG = VolumeLockService.class.getSimpleName();
 
-    private static final int notificationId = 7718;
+    private ServiceCommandProcessor serviceCommandProcessor;
 
-    private Handler handler;
-    private Runnable runnable;
+    private VolumeLockActionReceiver volumeLockActionReceiver;
 
-    private VolumeLock volumeLock;
+    private VolumeControl volumeControl;
+    public VolumeLock volumeLock;
     private VolumeLockNotification volumeLockNotification;
 
     private ShakeDetector shakeDetector;
@@ -25,6 +24,8 @@ public class VolumeLockService extends Service implements ShakeDetector.Listener
     @Override
     public void onCreate() {
         LOG.d(TAG, "onCreate()");
+
+        volumeControl = new VolumeControl(getApplicationContext());
 
         volumeLock = new VolumeLock(getApplicationContext());
 
@@ -34,6 +35,12 @@ public class VolumeLockService extends Service implements ShakeDetector.Listener
         shakeDetector = new ShakeDetector(this);
         shakeDetector.start((SensorManager)getSystemService(SENSOR_SERVICE));
 
+        volumeLockActionReceiver = new VolumeLockActionReceiver(getApplicationContext());
+        volumeLockActionReceiver.setVolumeLockActionListener(volumeLockActionListener);
+        volumeLockActionReceiver.start();
+
+        serviceCommandProcessor = new ServiceCommandProcessor(this);
+
         super.onCreate();
     }
 
@@ -41,6 +48,7 @@ public class VolumeLockService extends Service implements ShakeDetector.Listener
     public void onDestroy() {
         LOG.d(TAG,"onDestroy()");
         shakeDetector.stop();
+        volumeLockActionReceiver.stop();
         super.onDestroy();
     }
 
@@ -49,40 +57,11 @@ public class VolumeLockService extends Service implements ShakeDetector.Listener
         if (intent != null) {
             String action = intent.getAction();
             if (action != null)
-                processAction(action);
+                serviceCommandProcessor.processCommand(action);
         }
 
         return super.onStartCommand(intent, flags, startId);
     }
-
-    private void processAction(final String action) {
-        LOG.d(TAG,"processAction(), action = " + action);
-        if (action.equalsIgnoreCase(Constants.ACTION_START_SERVICE)) {
-            //if(!isForegroundServiceRunning()) {
-            handler = new Handler();
-            runnable = new Runnable() {
-                @Override
-                public void run() {
-                    LOG.d(TAG,"start foregroud service ~");
-                    startForeground(notificationId, new VolumeLockNotification(getApplicationContext()).build());
-                    volumeLock.lock();
-                }
-            };
-            handler.post(runnable);
-            //}
-        } else if (action.equalsIgnoreCase(Constants.ACTION_STOP_SERVICE)) {
-            //if(isForegroundServiceRunning()) {
-            LOG.d(TAG,"stop foregroud service ~");
-            volumeLock.unlock();
-            stopForeground(true);
-            stopSelf();
-            //}
-        } else {
-            LOG.d(TAG,"unknown action received ~");
-            throw new RuntimeException("Unknown action: " + action);
-        }
-    }
-
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -95,4 +74,21 @@ public class VolumeLockService extends Service implements ShakeDetector.Listener
         volumeLock.unlock();
         volumeLock.lock();
     }
+
+    private IVolumeLockActionListener volumeLockActionListener = new IVolumeLockActionListener() {
+        @Override
+        public void volumeUp() {
+            volumeLock.unlock();
+            volumeControl.volumeUp();
+            volumeLock.lock();
+        }
+
+        @Override
+        public void volumeDown() {
+            volumeLock.unlock();
+            volumeControl.volumeDown();
+            volumeLock.lock();
+        }
+    };
+
 }
